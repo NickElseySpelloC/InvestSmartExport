@@ -1,0 +1,27 @@
+InvestSmart:
+  HeadlessMode: False
+  LoginURL: https://www.investsmart.com.au/identity/logon
+  ShortPageLoad: 10
+  LongPageLoad: 20
+  Username: <Your InvestSmart Username>
+  Password: <Your InvestSmart Password>
+  WatchlistURL: <URL to your InvestSmart watchlist>
+
+Files:
+  OutputCSV: fund_data.csv
+  DaysToSave: 90
+  MonitoringLogFile: ISExportConfig.log
+  MonitoringLogFileMaxLines: 200
+  # How much information do we write to the log file. One of: none; error; warning; summary; detailed; debug; all
+  LogFileVerbosity: detailed
+  # How much information do we write to the console. One of: error; warning; summary; detailed; debug; all
+  ConsoleVerbosity: detailed
+  
+Email:
+  EnableEmail: True
+  SendEmailsTo: <Your email address here>
+  SMTPServer: <Your SMTP server here>
+  SMTPPort: 587
+  SMTPUsername: <Your SMTP username here>
+  SMTPPassword: <Your SMTP password here>
+  SubjectPrefix: 

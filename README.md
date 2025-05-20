@@ -47,7 +47,7 @@ Email:
     SMTPServer: smtp.gmail.com
     SMTPPort: 587
     SMTPUsername: john.doe@gmail.com
-    SMTPPassword: averystrongpassword!
+    SMTPPassword: <Your SMTP password>
     SubjectPrefix: "[Yahoo Finance Downloader] "
 ```
 

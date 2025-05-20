@@ -30,7 +30,7 @@ InvestSmart:
     ShortPageLoad: 10
     LongPageLoad: 20
     Username: john.doe@gmail.com
-    Password: somerandompwd
+    Password: <Your InvestSmart password>
     WatchlistURL: https://www.investsmart.com.au/portfolio-manager/watchlist/funds/12345?PortfolioID=67890
 
 Files:

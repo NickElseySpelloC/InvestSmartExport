@@ -22,6 +22,8 @@ from selenium.webdriver.support.ui import WebDriverWait
 
 from utility import ConfigManager, UtilityFunctions
 
+FUND_CODE_CACHE_FILE = "fund_code_cache.json"
+
 # Create an instance of ConfigManager
 system_config = ConfigManager()
 
@@ -200,19 +202,65 @@ def get_watchlist_table(web_driver):
     return table_obj
 
 
+def load_fund_code_cache():
+    """Load the fund code cache as a list of dicts."""
+    if Path(FUND_CODE_CACHE_FILE).exists():
+        with Path(FUND_CODE_CACHE_FILE).open("r", encoding="utf-8") as f:
+            try:
+                return json.load(f)
+            except json.JSONDecodeError:
+                return []
+    return []
+
+
+def save_fund_code_cache(cache):
+    """Save the fund code cache as a list of dicts."""
+    with Path(FUND_CODE_CACHE_FILE).open("w", encoding="utf-8") as f:
+        json.dump(cache, f, indent=2)
+
+
+def extract_apir_code(driver, fund_name):
+    """
+    Extract the APIR code for a fund.
+
+    First, check the cache. If not found, extract from the page and update the cache.
+    """
+    cache = load_fund_code_cache()
+    # Check cache for fund_name
+    for entry in cache:
+        if entry.get("fund_name") == fund_name and entry.get("apir_code"):
+            return entry["apir_code"]
+
+    apir_code = None
+    try:
+        rows = driver.find_elements(By.XPATH, "//tr")
+        for row in rows:
+            label_cells = row.find_elements(By.XPATH, "./td/label[@for='Fund_APIRCode']")
+            if label_cells:
+                tds = row.find_elements(By.TAG_NAME, "td")
+                if len(tds) >= 2:
+                    apir_code = tds[1].text.strip()
+                    break
+    except WebDriverException as e:
+        utility_funcs.log_message(f"Could not extract APIR code: {e}", "debug")
+
+    # Save to cache if found
+    if apir_code:
+        cache.append({"fund_name": fund_name, "apir_code": apir_code})
+        save_fund_code_cache(cache)
+    return apir_code
+
+
 def extract_fund_data(table_obj):
-    """Extract fund data from the watchlist table. Returns a list of fund data or None on error."""
+    """Extract fund data from the watchlist table, including APIR code from each fund's detail page, with caching."""
     local_tz = datetime.now().astimezone().tzinfo
-    # ===== Find correct column indexes =====
     try:
         headers = table_obj.find_elements(By.XPATH, ".//thead/tr/th")
-
     except InvalidSelectorException:
         utility_funcs.report_fatal_error(
             "InvalidSelectorException exception when scanning the watchlist table"
         )
         return None
-
     except WebDriverException:
         utility_funcs.report_fatal_error(
             "General web driver error when scanning the watchlist table"
@@ -226,7 +274,6 @@ def extract_fund_data(table_obj):
     fund_col_index = None
     price_col_index = None
 
-    # get the headings
     for idx, header in enumerate(headers):
         header_text = header.text.strip().lower()
         if "fund" in header_text:
@@ -240,12 +287,8 @@ def extract_fund_data(table_obj):
         )
         return None
 
-    # Today's date in dd/mm/yyyy format
     today_str = datetime.now(local_tz).strftime("%d/%m/%Y")
-
-    # Extract data rows
     fund_list = []
-
     rows = table_obj.find_elements(By.XPATH, ".//tbody/tr")
     if rows is None:
         utility_funcs.report_fatal_error(
@@ -253,25 +296,40 @@ def extract_fund_data(table_obj):
         )
         return None
 
+    driver = table_obj.parent
+
     for row in rows:
         try:
             cells = row.find_elements(By.TAG_NAME, "td")
-            fund_name = cells[fund_col_index].text.strip()
+            fund_cell = cells[fund_col_index]
+            fund_link = fund_cell.find_element(By.TAG_NAME, "a")
+            fund_name = fund_link.text.strip()
+            fund_url = fund_link.get_attribute("href")
             price_text = cells[price_col_index].text.strip()
-
-            # Clean price (remove dollar sign, commas, etc.) and convert to float
             price_value = float(price_text.replace("$", "").replace(",", "").strip())
 
-            fund_list.append((today_str, fund_name, price_value))
+            # Try cache first, else open detail page
+            apir_code = extract_apir_code(driver, fund_name)
+            if not apir_code:
+                driver.execute_script("window.open('');")
+                driver.switch_to.window(driver.window_handles[1])
+                driver.get(fund_url)
+                WebDriverWait(driver, 10).until(
+                    expected_con.presence_of_element_located((By.CSS_SELECTOR, "table.table-performance"))
+                )
+                apir_code = extract_apir_code(driver, fund_name)
+                driver.close()
+                driver.switch_to.window(driver.window_handles[0])
+
+            fund_list.append((apir_code, today_str, fund_name, "AUD", price_value))
         except WebDriverException as e:
             utility_funcs.report_fatal_error(f"Could not parse a row: {e}")
 
-    # Return the extracted fund data
     return fund_list
 
 
 def save_to_csv(data, file_path):
-    """Save the extracted fund data to a CSV file."""
+    """Save the extracted fund data to a CSV file, including APIR code."""
     # Today's date in dd/mm/yyyy format
     local_tz = datetime.now().astimezone().tzinfo
     today_str = datetime.now(local_tz).strftime("%d/%m/%Y")
@@ -282,7 +340,7 @@ def save_to_csv(data, file_path):
 
     # ===== Handle existing CSV (read and remove today's rows) =====
     existing_rows = []
-    header = ["Date", "Fund", "Current Unit Price"]
+    header = ["Symbol","Date","Name","Currency","Price"]
     if Path(file_path).exists():
         with Path(file_path).open(newline="", encoding="utf-8") as csvfile:
             reader = csv.reader(csvfile)
@@ -290,7 +348,7 @@ def save_to_csv(data, file_path):
             for row in reader:
                 if row:
                     row_date = (
-                        datetime.strptime(row[0], "%d/%m/%Y")
+                        datetime.strptime(row[1], "%d/%m/%Y")
                         .astimezone(local_tz)
                         .date()
                     )

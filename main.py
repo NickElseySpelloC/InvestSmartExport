@@ -78,6 +78,9 @@ def load_cookies(web_driver):
     """Load cookies from a file."""
     file_path = utility_funcs.cookie_file
 
+    if not Path(file_path).exists():
+        return False  # No cookies file found
+
     try:
         with Path(file_path).open(encoding="utf-8") as file:
             cookies = json.load(file)
@@ -93,11 +96,17 @@ def load_cookies(web_driver):
     else:
         return True
 
+def delete_cookies():
+    """Delete the cookies file."""
+    Path(utility_funcs.cookie_file).unlink(missing_ok=True)
+
 
 def login(web_driver, username, password):
     """Login to InvestSmart using the provided username and password. Return False if login fails."""
     login_url = utility_funcs.config["InvestSmart"]["LoginURL"]
     page_load_wait = utility_funcs.config["InvestSmart"]["LongPageLoad"]
+    short_load_wait = utility_funcs.config["InvestSmart"]["ShortPageLoad"]
+    login_timeout = False
 
     # Get the login page
     try:
@@ -127,17 +136,35 @@ def login(web_driver, username, password):
         WebDriverWait(web_driver, page_load_wait).until(
             expected_con.visibility_of_element_located((By.NAME, "Email")),
         )
-    except TimeoutException as e:
-        utility_funcs.report_fatal_error(
-            f"Timeout after {page_load_wait} seconds occurred while waiting for the Email element on the login page {login_url}: {e}"
-        )
-        return False
+    except TimeoutException:
+        # If we get a timeout waitiing for the email element on the login page, it's possible that we have been logged in already
+        login_timeout = True
 
     except WebDriverException as e:
         utility_funcs.report_fatal_error(
             f"General web driver error while while waiting for the Email element on the login page {login_url}: {e}"
         )
         return False
+
+    # If we have a login time, first check to see if we're on the account page
+    if login_timeout:
+        try:
+            WebDriverWait(web_driver, short_load_wait).until(
+                expected_con.presence_of_element_located(
+                    (By.XPATH, "//span[text()='My Account']")
+                ),
+            )
+            utility_funcs.log_message(
+                "Login skipped by applying cookies, bypassing login.", "debug"
+            )
+
+        except TimeoutException:
+            utility_funcs.report_fatal_error(
+                f"Timeout after {page_load_wait} seconds occurred while waiting for the Email element on the login page {login_url}"
+            )
+            return False
+        else:
+            return True  # Already logged in, so return True
 
     # Fill in login form
     username_input = web_driver.find_element(By.NAME, "Email")
@@ -287,7 +314,7 @@ def extract_fund_data(table_obj):
         )
         return None
 
-    today_str = datetime.now(local_tz).strftime("%d/%m/%Y")
+    today_str = datetime.now(local_tz).strftime("%Y-%m-%d")
     fund_list = []
     rows = table_obj.find_elements(By.XPATH, ".//tbody/tr")
     if rows is None:
@@ -348,7 +375,7 @@ def save_to_csv(data, file_path):
             for row in reader:
                 if row:
                     row_date = (
-                        datetime.strptime(row[1], "%d/%m/%Y")
+                        datetime.strptime(row[1], "%Y-%m-%d")
                         .astimezone(local_tz)
                         .date()
                     )
@@ -401,6 +428,10 @@ if __name__ == "__main__":
     try:
         if not try_login_bypass(driver):
             # Cookies unavailable or invalid - we need to login to the website.
+
+            #Delete any existing cookies file
+            delete_cookies()
+
             if login(
                 driver,
                 utility_funcs.config["InvestSmart"]["Username"],

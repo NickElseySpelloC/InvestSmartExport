@@ -8,7 +8,7 @@ InvestSmart:
   WatchlistURL: <URL to your InvestSmart watchlist>
 
 Files:
-  OutputCSV: fund_data.csv
+  OutputCSV: price_data.csv
   DaysToSave: 90
   MonitoringLogFile: ISExportConfig.log
   MonitoringLogFileMaxLines: 200

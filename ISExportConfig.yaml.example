@@ -10,10 +10,10 @@ InvestSmart:
 Files:
   OutputCSV: price_data.csv
   DaysToSave: 90
-  MonitoringLogFile: ISExportConfig.log
-  MonitoringLogFileMaxLines: 200
+  LogfileName: ISExportConfig.log
+  LogfileMaxLines: 200
   # How much information do we write to the log file. One of: none; error; warning; summary; detailed; debug; all
-  LogFileVerbosity: detailed
+  LogfileVerbosity: detailed
   # How much information do we write to the console. One of: error; warning; summary; detailed; debug; all
   ConsoleVerbosity: detailed
   

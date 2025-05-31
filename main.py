@@ -8,6 +8,7 @@ import time
 from datetime import datetime, timedelta
 from pathlib import Path
 
+from sc_utility import SCConfigManager, SCLogger
 from selenium import webdriver
 from selenium.common.exceptions import (  # Ensure this is imported
     InvalidSelectorException,
@@ -20,25 +21,35 @@ from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support import expected_conditions as expected_con
 from selenium.webdriver.support.ui import WebDriverWait
 
-from utility import ConfigManager, UtilityFunctions
+from config_schemas import ConfigSchema
 
+CONFIG_FILE = "ISExportConfig.yaml"
+COOKIE_FILE = "cookies.json"
 FUND_CODE_CACHE_FILE = "fund_code_cache.json"
 
-# Create an instance of ConfigManager
-system_config = ConfigManager()
+def select_file_location(file_name: str) -> str:
+    """
+    Selects the file location for the given file name.
 
-# Create an instance of the PowerControllerState
-utility_funcs = UtilityFunctions(system_config)
+    :param file_name: The name of the file to locate.
+    :return: The full path to the file. If the file does not exist in the current directory, it will look in the script directory.
+    """
+    current_dir = Path.cwd()
+    script_dir = Path(__file__).resolve().parent
+    file_path = current_dir / file_name
+    if not file_path.exists():
+        file_path = script_dir / file_name
+    return str(file_path)
 
 
-def try_login_bypass(web_driver):
+def try_login_bypass(config, logger, web_driver):
     """Attempt to use cookies to skip login. Tries to get the watchlist page."""
-    watchlist_url = utility_funcs.config["InvestSmart"]["WatchlistURL"]
-    page_load_wait = utility_funcs.config["InvestSmart"]["LongPageLoad"]
+    watchlist_url = config.get("InvestSmart", "WatchlistURL")
+    page_load_wait = config.get("InvestSmart", "LongPageLoad")
 
     web_driver.get(watchlist_url)  # Load the domain
-    if not load_cookies(web_driver):
-        utility_funcs.log_message("No cookies found. Proceeding with login.", "debug")
+    if not load_cookies(logger, web_driver):
+        logger.log_message("No cookies found. Proceeding with login.", "debug")
         return False
 
     # try the watchlist page again with the cookies loaded
@@ -51,32 +62,30 @@ def try_login_bypass(web_driver):
                 (By.XPATH, "//span[text()='My Account']")
             ),
         )
-        utility_funcs.log_message(
+        logger.log_message(
             "Login skipped by applying cookies, bypassing login.", "debug"
         )
 
     except TimeoutException:
-        utility_funcs.log_message(
+        logger.log_message(
             "Cookies were invalid, proceeding to login.", "detailed"
         )
         return False
     else:
         return True
 
-
-def save_cookies(web_driver):
+def save_cookies(logger, web_driver):
     """Save cookies to a file."""
-    file_path = utility_funcs.cookie_file
+    file_path = select_file_location(COOKIE_FILE)
 
     with Path(file_path).open("w", encoding="utf-8") as file:
         json.dump(web_driver.get_cookies(), file, indent=4)
 
-    utility_funcs.log_message("Cookies saved successfully.", "debug")
+    logger.log_message("Cookies saved successfully.", "debug")
 
-
-def load_cookies(web_driver):
+def load_cookies(logger, web_driver):
     """Load cookies from a file."""
-    file_path = utility_funcs.cookie_file
+    file_path = select_file_location(COOKIE_FILE)
 
     if not Path(file_path).exists():
         return False  # No cookies file found
@@ -87,10 +96,10 @@ def load_cookies(web_driver):
             for cookie in cookies:
                 web_driver.add_cookie(cookie)
 
-        utility_funcs.log_message("Cookies loaded successfully.", "debug")
+        logger.log_message("Cookies loaded successfully.", "debug")
 
     except FileNotFoundError:
-        utility_funcs.log_message("No cookies file found.", "debug")
+        logger.log_message("No cookies file found.", "debug")
         return False
 
     else:
@@ -98,14 +107,13 @@ def load_cookies(web_driver):
 
 def delete_cookies():
     """Delete the cookies file."""
-    Path(utility_funcs.cookie_file).unlink(missing_ok=True)
+    Path(select_file_location(COOKIE_FILE)).unlink(missing_ok=True)
 
-
-def login(web_driver, username, password):
+def login(config, logger, web_driver, username, password):  # noqa: PLR0915
     """Login to InvestSmart using the provided username and password. Return False if login fails."""
-    login_url = utility_funcs.config["InvestSmart"]["LoginURL"]
-    page_load_wait = utility_funcs.config["InvestSmart"]["LongPageLoad"]
-    short_load_wait = utility_funcs.config["InvestSmart"]["ShortPageLoad"]
+    login_url = config.get("InvestSmart", "LoginURL")
+    page_load_wait = config.get("InvestSmart", "LongPageLoad")
+    short_load_wait = config.get("InvestSmart", "ShortPageLoad")
     login_timeout = False
 
     # Get the login page
@@ -114,13 +122,13 @@ def login(web_driver, username, password):
         web_driver.get(login_url)
 
     except TimeoutException as e:
-        utility_funcs.report_fatal_error(
+        logger.log_fatal_error(
             f"Timeout occurred while trying to load the login page {login_url}: {e}"
         )
         return False
 
     except WebDriverException as e:
-        utility_funcs.report_fatal_error(
+        logger.log_fatal_error(
             f"General web driver error while trying to load the login page {login_url}: {e}"
         )
         return False
@@ -129,7 +137,7 @@ def login(web_driver, username, password):
 
     # If we are debugging, log any browser console errors
     for entry in web_driver.get_log("browser"):
-        utility_funcs.log_message(f"Browser console log entry: {entry}", "debug")
+        logger.log_message(f"Browser console log entry: {entry}", "debug")
 
     # Wait until the username field is present
     try:
@@ -141,7 +149,7 @@ def login(web_driver, username, password):
         login_timeout = True
 
     except WebDriverException as e:
-        utility_funcs.report_fatal_error(
+        logger.log_fatal_error(
             f"General web driver error while while waiting for the Email element on the login page {login_url}: {e}"
         )
         return False
@@ -154,12 +162,12 @@ def login(web_driver, username, password):
                     (By.XPATH, "//span[text()='My Account']")
                 ),
             )
-            utility_funcs.log_message(
+            logger.log_message(
                 "Login skipped by applying cookies, bypassing login.", "debug"
             )
 
         except TimeoutException:
-            utility_funcs.report_fatal_error(
+            logger.log_fatal_error(
                 f"Timeout after {page_load_wait} seconds occurred while waiting for the Email element on the login page {login_url}"
             )
             return False
@@ -172,8 +180,24 @@ def login(web_driver, username, password):
     username_input.send_keys(username)
     password_input.send_keys(password)
 
-    # Submit form - hit enter on the password field
-    password_input.send_keys(Keys.RETURN)
+    # Submit the form - first try by hitting enter on the password field
+    try:
+        password_input.send_keys(Keys.RETURN)
+        # Wait briefly to see if the login proceeds
+        time.sleep(short_load_wait)
+        # Check if still on login page (Email field still present)
+        if web_driver.find_elements(By.NAME, "Email"):
+            # Fallback: click the login button directly
+            login_btn = web_driver.find_element(By.ID, "loginBtn")
+            login_btn.click()
+    except Exception:   # noqa: BLE001
+        # Fallback: click the login button directly
+        try:
+            login_btn = web_driver.find_element(By.ID, "loginBtn")
+            login_btn.click()
+        except Exception as e:  # noqa: BLE001
+            logger.log_fatal_error(f"Login fails after trying Return and login button click: {e}", "debug")
+
 
     # Wait for successful login - we wait until "My Account" span appears
     try:
@@ -183,13 +207,13 @@ def login(web_driver, username, password):
             ),
         )
     except TimeoutException:
-        utility_funcs.report_fatal_error(
+        logger.log_fatal_error(
             f"Timeout after {page_load_wait} seconds occurred while waiting for the My Account element on the next page {login_url}."
         )
         return False
 
     except WebDriverException:
-        utility_funcs.report_fatal_error(
+        logger.log_fatal_error(
             f"General web driver error while while waiting for the My Account element on the next page {login_url}."
         )
         return False
@@ -198,10 +222,10 @@ def login(web_driver, username, password):
     return True
 
 
-def get_watchlist_table(web_driver):
+def get_watchlist_table(config, logger, web_driver):
     """Navigate to the specified watchlist URL. Returns a table object if successful, otherwise None."""
-    watchlist_url = utility_funcs.config["InvestSmart"]["WatchlistURL"]
-    page_load_wait = utility_funcs.config["InvestSmart"]["LongPageLoad"]
+    watchlist_url = config.get("InvestSmart", "WatchlistURL")
+    page_load_wait = config.get("InvestSmart", "LongPageLoad")
 
     try:
         web_driver.get(watchlist_url)
@@ -214,13 +238,13 @@ def get_watchlist_table(web_driver):
         )
 
     except TimeoutException as e:
-        utility_funcs.report_fatal_error(
+        logger.log_fatal_error(
             f"Timeout occurred while trying to load the watchlist page {watchlist_url}: {e}"
         )
         return None
 
     except WebDriverException as e:
-        utility_funcs.report_fatal_error(
+        logger.log_fatal_error(
             f"General web driver error while trying to load the watchlist page {watchlist_url}: {e}"
         )
         return None
@@ -246,7 +270,7 @@ def save_fund_code_cache(cache):
         json.dump(cache, f, indent=2)
 
 
-def extract_apir_code(driver, fund_name):
+def extract_apir_code(logger, driver, fund_name):
     """
     Extract the APIR code for a fund.
 
@@ -269,7 +293,7 @@ def extract_apir_code(driver, fund_name):
                     apir_code = tds[1].text.strip()
                     break
     except WebDriverException as e:
-        utility_funcs.log_message(f"Could not extract APIR code: {e}", "debug")
+        logger.log_message(f"Could not extract APIR code: {e}", "debug")
 
     # Save to cache if found
     if apir_code:
@@ -278,24 +302,24 @@ def extract_apir_code(driver, fund_name):
     return apir_code
 
 
-def extract_fund_data(table_obj):
+def extract_fund_data(logger, table_obj):
     """Extract fund data from the watchlist table, including APIR code from each fund's detail page, with caching."""
     local_tz = datetime.now().astimezone().tzinfo
     try:
         headers = table_obj.find_elements(By.XPATH, ".//thead/tr/th")
     except InvalidSelectorException:
-        utility_funcs.report_fatal_error(
+        logger.log_fatal_error(
             "InvalidSelectorException exception when scanning the watchlist table"
         )
         return None
     except WebDriverException:
-        utility_funcs.report_fatal_error(
+        logger.log_fatal_error(
             "General web driver error when scanning the watchlist table"
         )
         return None
 
     if headers is None:
-        utility_funcs.report_fatal_error("Could not find the watchlist table headers.")
+        logger.log_fatal_error("Could not find the watchlist table headers.")
         return None
 
     fund_col_index = None
@@ -309,7 +333,7 @@ def extract_fund_data(table_obj):
             price_col_index = idx
 
     if fund_col_index is None or price_col_index is None:
-        utility_funcs.report_fatal_error(
+        logger.log_fatal_error(
             "Could not find required columns in the watchlist table."
         )
         return None
@@ -318,7 +342,7 @@ def extract_fund_data(table_obj):
     fund_list = []
     rows = table_obj.find_elements(By.XPATH, ".//tbody/tr")
     if rows is None:
-        utility_funcs.report_fatal_error(
+        logger.log_fatal_error(
             "Could not find any rows in the watchlist table."
         )
         return None
@@ -336,7 +360,7 @@ def extract_fund_data(table_obj):
             price_value = float(price_text.replace("$", "").replace(",", "").strip())
 
             # Try cache first, else open detail page
-            apir_code = extract_apir_code(driver, fund_name)
+            apir_code = extract_apir_code(logger, driver, fund_name)
             if not apir_code:
                 driver.execute_script("window.open('');")
                 driver.switch_to.window(driver.window_handles[1])
@@ -344,25 +368,25 @@ def extract_fund_data(table_obj):
                 WebDriverWait(driver, 10).until(
                     expected_con.presence_of_element_located((By.CSS_SELECTOR, "table.table-performance"))
                 )
-                apir_code = extract_apir_code(driver, fund_name)
+                apir_code = extract_apir_code(logger, driver, fund_name)
                 driver.close()
                 driver.switch_to.window(driver.window_handles[0])
 
             fund_list.append((apir_code, today_str, fund_name, "AUD", price_value))
         except WebDriverException as e:
-            utility_funcs.report_fatal_error(f"Could not parse a row: {e}")
+            logger.log_fatal_error(f"Could not parse a row: {e}")
 
     return fund_list
 
 
-def save_to_csv(data, file_path):
+def save_to_csv(config, data, file_path):
     """Save the extracted fund data to a CSV file, including APIR code."""
     # Today's date in dd/mm/yyyy format
     local_tz = datetime.now().astimezone().tzinfo
     today_str = datetime.now(local_tz).strftime("%d/%m/%Y")
 
     # Set the earliest date to be an offset from today using the DaysToSave setting
-    days_to_save = utility_funcs.config["Files"]["DaysToSave"] or 30
+    days_to_save = config.get("Files", "DaysToSave") or 30
     earliest_date = datetime.now(local_tz).date() - timedelta(days=days_to_save)
 
     # ===== Handle existing CSV (read and remove today's rows) =====
@@ -400,7 +424,32 @@ def save_to_csv(data, file_path):
     return True
 
 
-if __name__ == "__main__":
+def main():  # noqa: PLR0915
+    # Get our default schema, validation schema, and placeholders
+    schemas = ConfigSchema()
+
+    # Initialize the SCConfigManager class
+    try:
+        config = SCConfigManager(
+            config_file=CONFIG_FILE,
+            default_config=schemas.default,  # Replace with your default config if needed
+            validation_schema=schemas.validation,  # Replace with your validation schema if needed
+            placeholders=schemas.placeholders  # Replace with your placeholders if needed
+        )
+    except RuntimeError as e:
+        print(f"Configuration file error: {e}", file=sys.stderr)
+        return
+
+    # Initialize the SCLogger class
+    try:
+        logger = SCLogger(config.get_logger_settings())
+    except RuntimeError as e:
+        print(f"Logger initialisation error: {e}", file=sys.stderr)
+        return
+
+    # Setup email
+    logger.register_email_settings(config.get_email_settings())
+
     # Setup the Chrome drive options
     chrome_options = Options()
     window_width = random.randint(1000, 2000)
@@ -413,12 +462,12 @@ if __name__ == "__main__":
         "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     )
     # Hide the browser window if headless mode is enabled
-    if utility_funcs.config["InvestSmart"]["HeadlessMode"]:
+    if config.get("InvestSmart", "HeadlessMode"):
         chrome_options.add_argument("--headless")
 
-    utility_funcs.log_message(
+    logger.log_message(
         "Starting InvestSmartExport utility with headless mode: "
-        + str(utility_funcs.config["InvestSmart"]["HeadlessMode"]),
+        + str(config.get("InvestSmart", "HeadlessMode")),
         "summary",
     )
 
@@ -426,61 +475,70 @@ if __name__ == "__main__":
     driver = webdriver.Chrome(options=chrome_options)
 
     try:
-        if not try_login_bypass(driver):
+        if not try_login_bypass(config, logger, driver):
             # Cookies unavailable or invalid - we need to login to the website.
 
             #Delete any existing cookies file
-            delete_cookies()
+            delete_cookies(logger)
 
             if login(
+                config,
+                logger,
                 driver,
-                utility_funcs.config["InvestSmart"]["Username"],
-                utility_funcs.config["InvestSmart"]["Password"],
+                config.get("InvestSmart", "Username"),
+                config.get("InvestSmart", "Password"),
             ):
                 # Call this after a successful login
-                save_cookies(driver)
+                save_cookies(logger, driver)
             else:
                 driver.quit()
                 sys.exit(1)
 
         # Navigate to the watchlist page
-        table = get_watchlist_table(driver)
+        table = get_watchlist_table(config, logger, driver)
         if table is None:
             driver.quit()
             sys.exit(1)
 
-        fund_data = extract_fund_data(table)
+        fund_data = extract_fund_data(logger, table)
         if fund_data is None:
             driver.quit()
             sys.exit(1)
 
-        csv_file_name = utility_funcs.config["Files"]["OutputCSV"]
-        csv_file_path = utility_funcs.config_manager.select_file_location(csv_file_name)
-        if not save_to_csv(fund_data, csv_file_path):
+        csv_file_name = config.get("Files", "OutputCSV")
+        csv_file_path = select_file_location(csv_file_name)
+        if not save_to_csv(config, fund_data, csv_file_path):
             driver.quit()
             sys.exit(1)
 
     # Catch any unexpected exceptions
     except Exception as e:  # noqa: BLE001
-        utility_funcs.report_fatal_error(
+        logger.log_fatal_error(
             f"An unexpected error occurred while writing: {e}"
         )
         driver.quit()
         sys.exit(1)
 
-    utility_funcs.log_message(
+    logger.log_message(
         f"Data extracted and saved to {csv_file_name} successfully.", "summary"
     )
 
     driver.quit()
 
     # If the prior run fails, send email that this run worked OK
-    if utility_funcs.fatal_error_tracking("get"):
-        utility_funcs.log_message(
+    if logger.get_fatal_error():
+        logger.log_message(
             "Run was successful after a prior failure.", "summary"
         )
-        utility_funcs.send_email(
+        logger.send_email(
             "Run recovery",
             "InvestSmartExport run was successful after a prior failure.",
         )
-        utility_funcs.fatal_error_tracking("set")
+        logger.clear_fatal_error()
+
+if __name__ == "__main__":
+    # Run the main module
+    main()
+
+    sys.exit(0)
+# End of script

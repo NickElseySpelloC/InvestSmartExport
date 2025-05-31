@@ -23,23 +23,9 @@ from selenium.webdriver.support.ui import WebDriverWait
 
 from config_schemas import ConfigSchema
 
-CONFIG_FILE = "ISExportConfig.yaml"
+CONFIG_FILE = "config.yaml"
 COOKIE_FILE = "cookies.json"
 FUND_CODE_CACHE_FILE = "fund_code_cache.json"
-
-def select_file_location(file_name: str) -> str:
-    """
-    Selects the file location for the given file name.
-
-    :param file_name: The name of the file to locate.
-    :return: The full path to the file. If the file does not exist in the current directory, it will look in the script directory.
-    """
-    current_dir = Path.cwd()
-    script_dir = Path(__file__).resolve().parent
-    file_path = current_dir / file_name
-    if not file_path.exists():
-        file_path = script_dir / file_name
-    return str(file_path)
 
 
 def try_login_bypass(config, logger, web_driver):
@@ -48,7 +34,7 @@ def try_login_bypass(config, logger, web_driver):
     page_load_wait = config.get("InvestSmart", "LongPageLoad")
 
     web_driver.get(watchlist_url)  # Load the domain
-    if not load_cookies(logger, web_driver):
+    if not load_cookies(config, logger, web_driver):
         logger.log_message("No cookies found. Proceeding with login.", "debug")
         return False
 
@@ -74,24 +60,24 @@ def try_login_bypass(config, logger, web_driver):
     else:
         return True
 
-def save_cookies(logger, web_driver):
+def save_cookies(config, logger, web_driver):
     """Save cookies to a file."""
-    file_path = select_file_location(COOKIE_FILE)
+    file_path = config.select_file_location(COOKIE_FILE)
 
-    with Path(file_path).open("w", encoding="utf-8") as file:
+    with file_path.open("w", encoding="utf-8") as file:
         json.dump(web_driver.get_cookies(), file, indent=4)
 
     logger.log_message("Cookies saved successfully.", "debug")
 
-def load_cookies(logger, web_driver):
+def load_cookies(config, logger, web_driver):
     """Load cookies from a file."""
-    file_path = select_file_location(COOKIE_FILE)
+    file_path = config.select_file_location(COOKIE_FILE)
 
-    if not Path(file_path).exists():
+    if not file_path.exists():
         return False  # No cookies file found
 
     try:
-        with Path(file_path).open(encoding="utf-8") as file:
+        with file_path.open(encoding="utf-8") as file:
             cookies = json.load(file)
             for cookie in cookies:
                 web_driver.add_cookie(cookie)
@@ -105,9 +91,9 @@ def load_cookies(logger, web_driver):
     else:
         return True
 
-def delete_cookies():
+def delete_cookies(config):
     """Delete the cookies file."""
-    Path(select_file_location(COOKIE_FILE)).unlink(missing_ok=True)
+    config.select_file_location(COOKIE_FILE).unlink(missing_ok=True)
 
 def login(config, logger, web_driver, username, password):  # noqa: PLR0915
     """Login to InvestSmart using the provided username and password. Return False if login fails."""
@@ -392,8 +378,8 @@ def save_to_csv(config, data, file_path):
     # ===== Handle existing CSV (read and remove today's rows) =====
     existing_rows = []
     header = ["Symbol","Date","Name","Currency","Price"]
-    if Path(file_path).exists():
-        with Path(file_path).open(newline="", encoding="utf-8") as csvfile:
+    if file_path.exists():
+        with file_path.open(newline="", encoding="utf-8") as csvfile:
             reader = csv.reader(csvfile)
             header = next(reader, None)  # Read the header
             for row in reader:
@@ -407,7 +393,7 @@ def save_to_csv(config, data, file_path):
                         existing_rows.append(row)
 
     # ===== Write updated CSV =====
-    with Path(file_path).open("w", newline="", encoding="utf-8") as csvfile:
+    with file_path.open("w", newline="", encoding="utf-8") as csvfile:
         writer = csv.writer(csvfile)
 
         # Write header
@@ -479,7 +465,7 @@ def main():  # noqa: PLR0915
             # Cookies unavailable or invalid - we need to login to the website.
 
             #Delete any existing cookies file
-            delete_cookies(logger)
+            delete_cookies(config)
 
             if login(
                 config,
@@ -489,7 +475,7 @@ def main():  # noqa: PLR0915
                 config.get("InvestSmart", "Password"),
             ):
                 # Call this after a successful login
-                save_cookies(logger, driver)
+                save_cookies(config, logger, driver)
             else:
                 driver.quit()
                 sys.exit(1)
@@ -506,7 +492,7 @@ def main():  # noqa: PLR0915
             sys.exit(1)
 
         csv_file_name = config.get("Files", "OutputCSV")
-        csv_file_path = select_file_location(csv_file_name)
+        csv_file_path = config.select_file_location(csv_file_name)
         if not save_to_csv(config, fund_data, csv_file_path):
             driver.quit()
             sys.exit(1)

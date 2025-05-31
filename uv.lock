@@ -97,7 +97,7 @@ dependencies = [
 requires-dist = [
     { name = "cerberus", specifier = ">=1.3.7" },
     { name = "pyyaml", specifier = ">=6.0.2" },
-    { name = "sc-utility", specifier = ">=1.0.1" },
+    { name = "sc-utility", specifier = ">=1.0.2" },
     { name = "selenium", specifier = ">=4.32.0" },
 ]
 
@@ -165,7 +165,7 @@ wheels = [
 
 [[package]]
 name = "sc-utility"
-version = "1.0.1"
+version = "1.0.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "cerberus" },
@@ -173,9 +173,9 @@ dependencies = [
     { name = "requests" },
     { name = "tzdata" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/ba/2a/d5c89edf1c36bb6a7a1e70fefb513b21e8ba42d81c0dc0931f2c76717bac/sc_utility-1.0.1.tar.gz", hash = "sha256:e27c8aa221f60d1a548d388ee2d38f4e1780815eb0ad6c5d75cf20f71108d0ac", size = 7855, upload-time = "2025-05-31T10:45:19.857Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/b6/68/f84e9ef694c66fb67fed249d2256cceec259cfe5afbb6e01f4c49412098f/sc_utility-1.0.2.tar.gz", hash = "sha256:f821b4e82c2cd384fa25722ea2461510f3f5ea981af4a7b33ac49db39580535b", size = 8023, upload-time = "2025-05-31T15:17:47.362Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/93/91/6af2914ed7309c40b0cc17bc8aeff68106479dd4a55e575aaccabab20750/sc_utility-1.0.1-py3-none-any.whl", hash = "sha256:3b94180f88a113b3e26bff3bd990810ab1edc87631514719ec902ceee5a1f853", size = 8058, upload-time = "2025-05-31T10:45:18.177Z" },
+    { url = "https://files.pythonhosted.org/packages/5c/a9/44aa0b5568616737203b10c02f7358e083592a5655a41548062f524e2b1b/sc_utility-1.0.2-py3-none-any.whl", hash = "sha256:393ea6bca993477210087e125e1cf6650d4ce942d8982c83997637f76b944223", size = 8196, upload-time = "2025-05-31T15:17:45.012Z" },
 ]
 
 [[package]]

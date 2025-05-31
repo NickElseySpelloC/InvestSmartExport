@@ -34,9 +34,9 @@ InvestSmart:
     WatchlistURL: https://www.investsmart.com.au/portfolio-manager/watchlist/funds/12345?PortfolioID=67890
 
 Files:
-    OutputCSV: fund_data.csv
+    OutputCSV: price_data.csv
     DaysToSave: 90
-    MonitoringLogFile: ISExportConfig.log
+    MonitoringLogFile: logfile.log
     MonitoringLogFileMaxLines: 200
     LogFileVerbosity: detailed
     ConsoleVerbosity: detailed

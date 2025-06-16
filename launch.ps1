@@ -1,8 +1,8 @@
 <#
 =======================================================
-Invest Smart Export
+Application Launcher
 
-Downloads prices from a InvestSmart watchlist and saves them in a CSV file.
+Requires Python and UV to be installed
 =======================================================
 #>
 

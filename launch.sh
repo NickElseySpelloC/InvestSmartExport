@@ -1,8 +1,8 @@
 #!/bin/bash
 : '=======================================================
-InvestSmartExport 
+Application Launcher
 
-Downlaods the latest fund data from the InvestSmart website
+Requires Python and UV to be installed
 =========================================================='
 
 #User parameters

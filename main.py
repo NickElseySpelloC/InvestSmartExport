@@ -518,7 +518,7 @@ def main():  # noqa: PLR0915
         )
         logger.send_email(
             "Run recovery",
-            "InvestSmartExport run was successful after a prior failure.",
+            "Portfolio Performance reporter run was successful after a prior failure.",
         )
         logger.clear_fatal_error()
 

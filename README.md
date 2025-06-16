@@ -19,10 +19,10 @@ Windows: `winget install python3 --source winget --scope machine`
 macOS: 'brew install uvicorn'
 Windows: `pip install uv`
 
-The shell script used to run the app (_InvestSmartExport.sh_ or _InvestSmartExport.ps1_) is uses the *uv sync* command to ensure that all the prerequitie Python packages are installed in the virtual environment.
+The shell script used to run the app (_launch.sh_ or _launch.ps1_) is uses the *uv sync* command to ensure that all the prerequitie Python packages are installed in the virtual environment.
 
 # Configuration File 
-The script uses the *ISExportConfig.yaml* YAML file for configuration. An example of included with the project (*ISExportConfig.yaml.example*). Copy this to *ISExportConfig.yaml* before running the app for the first time.  Here's an example config file:
+The script uses the *config.yaml* YAML file for configuration. An example of included with the project (*config.yaml.example*). Copy this to *config.yaml* before running the app for the first time.  Here's an example config file:
 ```
 InvestSmart:
     HeadlessMode: False
@@ -36,9 +36,9 @@ InvestSmart:
 Files:
     OutputCSV: price_data.csv
     DaysToSave: 90
-    MonitoringLogFile: logfile.log
-    MonitoringLogFileMaxLines: 200
-    LogFileVerbosity: detailed
+    Logfile: logfile.log
+    LogfileMaxLines: 200
+    LogfileVerbosity: detailed
     ConsoleVerbosity: detailed
 
 Email:
@@ -70,10 +70,10 @@ Email:
 |:--|:--|
 | OutputCSV | The name of the CSV file to write prices to. If the file already exists, prices will be appended to the end of the CSV file. | 
 | DaysToSave | Fund price data is appended to the CSV file. This setting sets the maximum number of days to keep price data for. Set to 0 or blank if not truncation is required. | 
-| MonitoringLogFile | A text log file that records progress messages and warnings. | 
-| MonitoringLogFileMaxLines| Maximum number of lines to keep in the MonitoringLogFileMaxLines. If zero, file will never be truncated. | 
-| LogFileVerbosity | The level of detail captured in the MonitoringLogFile. One of: <br>* none<br>* error<br>* warning<br>* summary<br>* detailed<br>* debug<br>* all | 
-| ConsoleVerbosity | Controls the amount of information written to the console. One of: <br>* error<br>* warning<br>* summary<br>* detailed<br>* debug<br>* all <br>Errors are written to stderr all other messages are written to stdout | 
+| LogfileName | The name of the log file, can be a relative or absolute path. | 
+| LogfileMaxLines | Maximum number of lines to keep in the log file. If zero, file will never be truncated. | 
+| LogfileVerbosity | The level of detail captured in the log file. One of: none; error; warning; summary; detailed; debug; all | 
+| ConsoleVerbosity | Controls the amount of information written to the console. One of: error; warning; summary; detailed; debug; all. Errors are written to stderr all other messages are written to stdout | 
 
 ### Section: Email
 
@@ -90,14 +90,14 @@ Email:
 Run the app using the relavant shell script for your operating system:
 
 ## macOS / Linux
-`InvestSmartExport.sh`
+`launch.sh`
 
 ## Windows 
-`powershell -ExecutionPolicy ByPass -c  .\InvestSmartExport.ps1`
+`powershell -ExecutionPolicy ByPass -c  .\launch.ps1`
 
 # Troubleshooting
 ## "No module named xxx"
-Ensure all the Python modules are installed in the virtual environment. Make sure you are running the app via the *InvestSmartExport* script.
+Ensure all the Python modules are installed in the virtual environment. Make sure you are running the app via the *launch* script.
 
 ## ModuleNotFoundError: No module named 'requests' (macOS)
 If you can run the script just fine from the command line, but you're getting this error when running from crontab, make sure the crontab environment has the Python3 folder in it's path. First, at the command line find out where python3 is being run from:
@@ -107,4 +107,4 @@ If you can run the script just fine from the command line, but you're getting th
 And then add this to a PATH command in your crontab:
 
 `PATH=/usr/local/bin:/usr/bin:/bin`
-`0 8 * * * /Users/bob/scripts/YahooFinance.sh`
+`0 8 * * * /Users/bob/scripts/InvestSmartExport/launch.sh`

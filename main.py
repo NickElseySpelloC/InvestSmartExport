@@ -28,8 +28,66 @@ COOKIE_FILE = "cookies.json"
 FUND_CODE_CACHE_FILE = "fund_code_cache.json"
 
 
-def try_login_bypass(config, logger, web_driver):
-    """Attempt to use cookies to skip login. Tries to get the watchlist page."""
+def create_undetectable_chrome(config):
+    """Create an undetectable Chrome WebDriver instance with randomized window size and user-agent.
+
+    Args:
+        config: The configuration manager instance.
+
+    Returns:
+        webdriver.Chrome: An undetectable Chrome WebDriver instance.
+    """
+    # Set up Chrome options
+    chrome_options = Options()
+
+    # Randomize window size
+    window_width = random.randint(1000, 2000)
+    window_height = random.randint(1000, 2000)
+    chrome_options.add_argument(f"--window-size={window_width},{window_height}")
+
+    # General options
+    chrome_options.add_argument("--disable-gpu")
+    chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--disable-dev-shm-usage")
+
+    # Set a realistic user-agent
+    chrome_options.add_argument(
+        "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/123.0.0.0 Safari/537.36"
+    )
+
+    if config.get("InvestSmart", "HeadlessMode"):
+        chrome_options.add_argument("--headless=new")  # Use newer headless mode
+
+    # Launch driver
+    driver = webdriver.Chrome(options=chrome_options)
+
+    # Remove 'navigator.webdriver' flag
+    driver.execute_cdp_cmd(
+        "Page.addScriptToEvaluateOnNewDocument",
+        {
+            "source": """
+            Object.defineProperty(navigator, 'webdriver', {
+              get: () => undefined
+            });
+            """
+        },
+    )
+    return driver
+
+
+def try_login_bypass(config, logger, web_driver) -> bool:
+    """Attempt to use cookies to skip login. Tries to get the watchlist page.
+
+    Args:
+        config: The configuration manager instance.
+        logger: The logger instance.
+        web_driver: The Selenium WebDriver instance.
+
+    Returns:
+        bool: True if login was successful or cookies were valid, False otherwise.
+    """
     watchlist_url = config.get("InvestSmart", "WatchlistURL")
     page_load_wait = config.get("InvestSmart", "LongPageLoad")
 
@@ -53,6 +111,7 @@ def try_login_bypass(config, logger, web_driver):
         )
 
     except TimeoutException:
+        save_cookies()
         logger.log_message(
             "Cookies were invalid, proceeding to login.", "detailed"
         )
@@ -60,8 +119,15 @@ def try_login_bypass(config, logger, web_driver):
     else:
         return True
 
+
 def save_cookies(config, logger, web_driver):
-    """Save cookies to a file."""
+    """Save cookies to a file.
+
+    Args:
+        config: The configuration manager instance.
+        logger: The logger instance.
+        web_driver: The Selenium WebDriver instance.
+    """
     file_path = config.select_file_location(COOKIE_FILE)
 
     with file_path.open("w", encoding="utf-8") as file:
@@ -69,8 +135,18 @@ def save_cookies(config, logger, web_driver):
 
     logger.log_message("Cookies saved successfully.", "debug")
 
-def load_cookies(config, logger, web_driver):
-    """Load cookies from a file."""
+
+def load_cookies(config, logger, web_driver) -> bool:
+    """Load cookies from a file.
+
+    Args:
+        config: The configuration manager instance.
+        logger: The logger instance.
+        web_driver: The Selenium WebDriver instance.
+
+    Returns:
+        bool: True if cookies were loaded successfully, False if no cookies file was found.
+    """
     file_path = config.select_file_location(COOKIE_FILE)
 
     if not file_path.exists():
@@ -91,12 +167,29 @@ def load_cookies(config, logger, web_driver):
     else:
         return True
 
+
 def delete_cookies(config):
-    """Delete the cookies file."""
+    """Delete the cookies file.
+
+    Args:
+        config: The configuration manager instance.
+    """
     config.select_file_location(COOKIE_FILE).unlink(missing_ok=True)
 
-def login(config, logger, web_driver, username, password):  # noqa: PLR0915
-    """Login to InvestSmart using the provided username and password. Return False if login fails."""
+
+def login(config, logger, web_driver, username, password) -> bool:  # noqa: PLR0915
+    """Login to InvestSmart using the provided username and password. Return False if login fails.
+
+    Args:
+        config: The configuration manager instance.
+        logger: The logger instance.
+        web_driver: The Selenium WebDriver instance.
+        username: The username for login.
+        password: The password for login.
+
+    Returns:
+        bool: True if login was successful, False otherwise.
+    """
     login_url = config.get("InvestSmart", "LoginURL")
     page_load_wait = config.get("InvestSmart", "LongPageLoad")
     short_load_wait = config.get("InvestSmart", "ShortPageLoad")
@@ -184,7 +277,6 @@ def login(config, logger, web_driver, username, password):  # noqa: PLR0915
         except Exception as e:  # noqa: BLE001
             logger.log_fatal_error(f"Login fails after trying Return and login button click: {e}", "debug")
 
-
     # Wait for successful login - we wait until "My Account" span appears
     try:
         WebDriverWait(web_driver, page_load_wait).until(
@@ -208,13 +300,26 @@ def login(config, logger, web_driver, username, password):  # noqa: PLR0915
     return True
 
 
-def get_watchlist_table(config, logger, web_driver):
-    """Navigate to the specified watchlist URL. Returns a table object if successful, otherwise None."""
+def get_watchlist_table(config, logger, web_driver) -> object:
+    """Navigate to the specified watchlist URL.
+
+    Args:
+        config: The configuration manager instance.
+        logger: The logger instance.
+        web_driver: The Selenium WebDriver instance.
+
+    Returns:
+        object: a table object if successful, otherwise None.
+    """
     watchlist_url = config.get("InvestSmart", "WatchlistURL")
     page_load_wait = config.get("InvestSmart", "LongPageLoad")
 
     try:
         web_driver.get(watchlist_url)
+
+        # If redirected to fundlater, try again
+        if web_driver.current_url.startswith("https://www.fundlater.com.au/"):
+            web_driver.get(watchlist_url)
 
         # Wait for the watchlist table to load
         table_obj = WebDriverWait(web_driver, page_load_wait).until(
@@ -239,8 +344,12 @@ def get_watchlist_table(config, logger, web_driver):
     return table_obj
 
 
-def load_fund_code_cache():
-    """Load the fund code cache as a list of dicts."""
+def load_fund_code_cache() -> list:
+    """Load the fund code cache as a list of dicts.
+
+    Returns:
+        list: A list of dictionaries containing fund names and their corresponding APIR codes.
+    """
     if Path(FUND_CODE_CACHE_FILE).exists():
         with Path(FUND_CODE_CACHE_FILE).open("r", encoding="utf-8") as f:
             try:
@@ -251,16 +360,25 @@ def load_fund_code_cache():
 
 
 def save_fund_code_cache(cache):
-    """Save the fund code cache as a list of dicts."""
+    """Save the fund code cache as a list of dicts.
+
+    Args:
+        cache (list): A list of dictionaries containing fund names and their corresponding APIR codes.
+    """
     with Path(FUND_CODE_CACHE_FILE).open("w", encoding="utf-8") as f:
         json.dump(cache, f, indent=2)
 
 
-def extract_apir_code(logger, driver, fund_name):
-    """
-    Extract the APIR code for a fund.
+def extract_apir_code(logger, driver, fund_name) -> str:
+    """Extract the APIR code for a fund. First, check the cache. If not found, extract from the page and update the cache.
 
-    First, check the cache. If not found, extract from the page and update the cache.
+    Args:
+        logger: The logger instance.
+        driver: The Selenium WebDriver instance.
+        fund_name: The name of the fund to extract the APIR code for.
+
+    Returns:
+        str: The APIR code if found, otherwise None.
     """
     cache = load_fund_code_cache()
     # Check cache for fund_name
@@ -288,8 +406,17 @@ def extract_apir_code(logger, driver, fund_name):
     return apir_code
 
 
-def extract_fund_data(logger, table_obj):
-    """Extract fund data from the watchlist table, including APIR code from each fund's detail page, with caching."""
+def extract_fund_data(logger, table_obj) -> list:  # noqa: PLR0914
+    """Extract fund data from the watchlist table, including APIR code from each fund's detail page, with caching.
+
+    Args:
+        logger: The logger instance.
+        table_obj: The Selenium WebDriver element representing the watchlist table.
+
+    Returns:
+        list: A list of tuples containing fund data (APIR code, date, name, currency, price).
+    """
+    # Load the local timezone
     local_tz = datetime.now().astimezone().tzinfo
     try:
         headers = table_obj.find_elements(By.XPATH, ".//thead/tr/th")
@@ -365,8 +492,17 @@ def extract_fund_data(logger, table_obj):
     return fund_list
 
 
-def save_to_csv(config, data, file_path):
-    """Save the extracted fund data to a CSV file, including APIR code."""
+def save_to_csv(config, data, file_path) -> bool:
+    """Save the extracted fund data to a CSV file, including APIR code.
+
+    Args:
+        config: The configuration manager instance.
+        data: A list of tuples containing fund data (APIR code, date, name, currency, price).
+        file_path: The path to the CSV file where data will be saved.
+
+    Returns:
+        bool: True if the data was saved successfully, False otherwise.
+    """
     # Today's date in dd/mm/yyyy format
     local_tz = datetime.now().astimezone().tzinfo
     today_str = datetime.now(local_tz).strftime("%d/%m/%Y")
@@ -377,7 +513,7 @@ def save_to_csv(config, data, file_path):
 
     # ===== Handle existing CSV (read and remove today's rows) =====
     existing_rows = []
-    header = ["Symbol","Date","Name","Currency","Price"]
+    header = ["Symbol", "Date", "Name", "Currency", "Price"]
     if file_path.exists():
         with file_path.open(newline="", encoding="utf-8") as csvfile:
             reader = csv.reader(csvfile)
@@ -410,7 +546,7 @@ def save_to_csv(config, data, file_path):
     return True
 
 
-def main():  # noqa: PLR0915
+def main():
     # Get our default schema, validation schema, and placeholders
     schemas = ConfigSchema()
 
@@ -437,34 +573,13 @@ def main():  # noqa: PLR0915
     logger.register_email_settings(config.get_email_settings())
 
     # Setup the Chrome drive options
-    chrome_options = Options()
-    window_width = random.randint(1000, 2000)
-    window_height = random.randint(1000, 2000)
-    chrome_options.add_argument(f"--window-size={window_width},{window_height}")
-    chrome_options.add_argument("--disable-gpu")
-    chrome_options.add_argument("--no-sandbox")
-    chrome_options.add_argument("--disable-dev-shm-usage")
-    chrome_options.add_argument(
-        "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-    )
-    # Hide the browser window if headless mode is enabled
-    if config.get("InvestSmart", "HeadlessMode"):
-        chrome_options.add_argument("--headless")
-
-    logger.log_message(
-        "Starting InvestSmartExport utility with headless mode: "
-        + str(config.get("InvestSmart", "HeadlessMode")),
-        "summary",
-    )
-
-    # Start WebDriver
-    driver = webdriver.Chrome(options=chrome_options)
+    driver = create_undetectable_chrome(config)
 
     try:
         if not try_login_bypass(config, logger, driver):
             # Cookies unavailable or invalid - we need to login to the website.
 
-            #Delete any existing cookies file
+            # Delete any existing cookies file
             delete_cookies(config)
 
             if login(
@@ -521,6 +636,7 @@ def main():  # noqa: PLR0915
             "Portfolio Performance reporter run was successful after a prior failure.",
         )
         logger.clear_fatal_error()
+
 
 if __name__ == "__main__":
     # Run the main module

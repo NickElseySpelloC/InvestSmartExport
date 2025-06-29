@@ -1,5 +1,6 @@
 """Configuration schemas for use with the SCConfigManager class."""
 
+
 class ConfigSchema:
     """Base class for configuration schemas."""
 
@@ -100,4 +101,3 @@ class ConfigSchema:
                 },
             },
         }
-

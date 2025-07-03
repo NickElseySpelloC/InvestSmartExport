@@ -88,6 +88,10 @@ def try_login_bypass(config, logger, web_driver) -> bool:
     Returns:
         bool: True if login was successful or cookies were valid, False otherwise.
     """
+    if not have_cookies(config):
+        logger.log_message("No cookies found. Proceeding with login.", "debug")
+        return False
+
     watchlist_url = config.get("InvestSmart", "WatchlistURL")
     page_load_wait = config.get("InvestSmart", "LongPageLoad")
 
@@ -111,7 +115,6 @@ def try_login_bypass(config, logger, web_driver) -> bool:
         )
 
     except TimeoutException:
-        save_cookies()
         logger.log_message(
             "Cookies were invalid, proceeding to login.", "detailed"
         )
@@ -134,6 +137,18 @@ def save_cookies(config, logger, web_driver):
         json.dump(web_driver.get_cookies(), file, indent=4)
 
     logger.log_message("Cookies saved successfully.", "debug")
+
+
+def have_cookies(config) -> bool:
+    """Check if the cookies file exists.
+
+    Args:
+        config: The configuration manager instance.
+
+    Returns:
+        bool: True if cookies file exists, False otherwise.
+    """
+    return config.select_file_location(COOKIE_FILE).exists()
 
 
 def load_cookies(config, logger, web_driver) -> bool:
@@ -264,6 +279,12 @@ def login(config, logger, web_driver, username, password) -> bool:  # noqa: PLR0
         password_input.send_keys(Keys.RETURN)
         # Wait briefly to see if the login proceeds
         time.sleep(short_load_wait)
+
+        # If redirected to fundlater, try to force the watchlist page
+        if web_driver.current_url.startswith("https://www.fundlater.com.au/"):
+            watchlist_url = config.get("InvestSmart", "WatchlistURL")
+            web_driver.get(watchlist_url)
+
         # Check if still on login page (Email field still present)
         if web_driver.find_elements(By.NAME, "Email"):
             # Fallback: click the login button directly

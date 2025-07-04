@@ -18,7 +18,7 @@ class ConfigSchema:
             "Files": {
                 "OutputCSV": "price_data.csv",
                 "DaysToSave": 30,
-                "LogfileName": "ISExportConfig.log",
+                "LogfileName": "logfile.log",
                 "LogfileMaxLines": 500,
                 "LogfileVerbosity": "detailed",
                 "ConsoleVerbosity": "summary",

@@ -390,7 +390,7 @@ def save_fund_code_cache(cache):
         json.dump(cache, f, indent=2)
 
 
-def extract_apir_code(logger, driver, fund_name) -> str:
+def extract_apir_code(logger, driver, fund_name) -> str | None:
     """Extract the APIR code for a fund. First, check the cache. If not found, extract from the page and update the cache.
 
     Args:
@@ -427,7 +427,7 @@ def extract_apir_code(logger, driver, fund_name) -> str:
     return apir_code
 
 
-def extract_fund_data(logger, table_obj) -> list:  # noqa: PLR0914
+def extract_fund_data(logger, table_obj) -> list | None:  # noqa: PLR0914
     """Extract fund data from the watchlist table, including APIR code from each fund's detail page, with caching.
 
     Args:
@@ -534,11 +534,14 @@ def save_to_csv(config, data, file_path) -> bool:
 
     # ===== Handle existing CSV (read and remove today's rows) =====
     existing_rows = []
-    header = ["Symbol", "Date", "Name", "Currency", "Price"]
+    default_header = ["Symbol", "Date", "Name", "Currency", "Price"]
+    header = default_header
     if file_path.exists():
         with file_path.open(newline="", encoding="utf-8") as csvfile:
             reader = csv.reader(csvfile)
-            header = next(reader, None)  # Read the header
+            file_header = next(reader, None)  # Read the header
+            if file_header is not None:
+                header = file_header
             for row in reader:
                 if row:
                     row_date = (
@@ -575,9 +578,9 @@ def main():
     try:
         config = SCConfigManager(
             config_file=CONFIG_FILE,
-            default_config=schemas.default,  # Replace with your default config if needed
-            validation_schema=schemas.validation,  # Replace with your validation schema if needed
-            placeholders=schemas.placeholders  # Replace with your placeholders if needed
+            default_config=schemas.default,
+            validation_schema=schemas.validation,
+            placeholders=schemas.placeholders
         )
     except RuntimeError as e:
         print(f"Configuration file error: {e}", file=sys.stderr)
@@ -627,8 +630,8 @@ def main():
             driver.quit()
             sys.exit(1)
 
-        csv_file_name = config.get("Files", "OutputCSV")
-        csv_file_path = config.select_file_location(csv_file_name)
+        csv_file_name = config.get("Files", "OutputCSV", default="price_data.csv")
+        csv_file_path = config.select_file_location(csv_file_name)  # type: ignore[attr-defined]
         if not save_to_csv(config, fund_data, csv_file_path):
             driver.quit()
             sys.exit(1)
@@ -654,7 +657,7 @@ def main():
         )
         logger.send_email(
             "Run recovery",
-            "Portfolio Performance reporter run was successful after a prior failure.",
+            "Run was successful after a prior failure.",
         )
         logger.clear_fatal_error()
 

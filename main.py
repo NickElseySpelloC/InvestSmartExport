@@ -1,14 +1,13 @@
 """Login to InvestSmart and download the current fund prices listed in the selected watchlist."""
 
-import csv
 import json
 import random
 import sys
 import time
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 
-from sc_utility import SCConfigManager, SCLogger
+from sc_utility import CSVReader, DateHelper, SCConfigManager, SCLogger
 from selenium import webdriver
 from selenium.common.exceptions import (  # Ensure this is imported
     InvalidSelectorException,
@@ -513,61 +512,26 @@ def extract_fund_data(logger, table_obj) -> list | None:  # noqa: PLR0914
     return fund_list
 
 
-def save_to_csv(config, data, file_path) -> bool:
+def save_to_csv(fund_prices, config, logger, header_config):
     """Save the extracted fund data to a CSV file, including APIR code.
 
     Args:
-        config: The configuration manager instance.
-        data: A list of tuples containing fund data (APIR code, date, name, currency, price).
-        file_path: The path to the CSV file where data will be saved.
-
-    Returns:
-        bool: True if the data was saved successfully, False otherwise.
+        fund_prices (list[dict]): The list of fund prices to save.
+        config (SCConfigManager): The configuration manager instance.
+        logger (SCLogger): The logger instance for logging messages.
+        header_config (list[dict]): The configuration for the CSV header.
     """
-    # Today's date in dd/mm/yyyy format
-    local_tz = datetime.now().astimezone().tzinfo
-    today_str = datetime.now(local_tz).strftime("%d/%m/%Y")
+    csv_path = logger.select_file_location(config.get("Files", "OutputCSV", default="price_data.csv"))
 
-    # Set the earliest date to be an offset from today using the DaysToSave setting
-    days_to_save = config.get("Files", "DaysToSave") or 30
-    earliest_date = datetime.now(local_tz).date() - timedelta(days=days_to_save)
+    # Second entry in header_config is the Date column
+    header_config[1]["minimum"] = DateHelper.today_add_days(-config.get("Files", "DaysToSave", default=365))
 
-    # ===== Handle existing CSV (read and remove today's rows) =====
-    existing_rows = []
-    default_header = ["Symbol", "Date", "Name", "Currency", "Price"]
-    header = default_header
-    if file_path.exists():
-        with file_path.open(newline="", encoding="utf-8") as csvfile:
-            reader = csv.reader(csvfile)
-            file_header = next(reader, None)  # Read the header
-            if file_header is not None:
-                header = file_header
-            for row in reader:
-                if row:
-                    row_date = (
-                        datetime.strptime(row[1], "%Y-%m-%d")
-                        .astimezone(local_tz)
-                        .date()
-                    )
-                    if row_date >= earliest_date and row[0] != today_str:
-                        existing_rows.append(row)
-
-    # ===== Write updated CSV =====
-    with file_path.open("w", newline="", encoding="utf-8") as csvfile:
-        writer = csv.writer(csvfile)
-
-        # Write header
-        writer.writerow(header)
-
-        # Write previous rows (without today's duplicates)
-        for row in existing_rows:
-            writer.writerow(row)
-
-        # Write today's new rows
-        for row in data:
-            writer.writerow(row)
-
-    return True
+    # Create an instance of the CSVReader class and update the file
+    try:
+        csv_reader = CSVReader(csv_path, header_config)
+        csv_reader.update_csv_file(fund_prices)
+    except (ImportError, TypeError, ValueError, RuntimeError) as e:
+        logger.log_fatal_error(f"Failed to update CSV file: {e}")
 
 
 def main():
@@ -630,11 +594,7 @@ def main():
             driver.quit()
             sys.exit(1)
 
-        csv_file_name = config.get("Files", "OutputCSV", default="price_data.csv")
-        csv_file_path = config.select_file_location(csv_file_name)  # type: ignore[attr-defined]
-        if not save_to_csv(config, fund_data, csv_file_path):
-            driver.quit()
-            sys.exit(1)
+        save_to_csv(fund_data, config, logger, schemas.csv_header_config)
 
     # Catch any unexpected exceptions
     except Exception as e:  # noqa: BLE001
@@ -644,9 +604,7 @@ def main():
         driver.quit()
         sys.exit(1)
 
-    logger.log_message(
-        f"Data extracted and saved to {csv_file_name} successfully.", "summary"
-    )
+    logger.log_message("Data extracted and saved to CSV successfully.", "summary")
 
     driver.quit()
 

@@ -101,3 +101,33 @@ class ConfigSchema:
                 },
             },
         }
+
+        self.csv_header_config = [
+            {
+                "name": "Symbol",
+                "type": "str",
+                "match": True,
+                "sort": 2,
+            },
+            {
+                "name": "Date",
+                "type": "date",
+                "format": "%Y-%m-%d",
+                "match": True,
+                "sort": 1,
+                "minimum": None,
+            },
+            {
+                "name": "Name",
+                "type": "str",
+            },
+            {
+                "name": "Currency",
+                "type": "str",
+            },
+            {
+                "name": "Price",
+                "type": "float",
+                "format": ".2f",
+            },
+        ]

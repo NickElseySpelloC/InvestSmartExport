@@ -4,7 +4,6 @@ import json
 import random
 import sys
 import time
-from datetime import datetime
 from pathlib import Path
 
 from sc_utility import CSVReader, DateHelper, SCConfigManager, SCLogger
@@ -437,7 +436,6 @@ def extract_fund_data(logger, table_obj) -> list | None:  # noqa: PLR0914
         list: A list of tuples containing fund data (APIR code, date, name, currency, price).
     """
     # Load the local timezone
-    local_tz = datetime.now().astimezone().tzinfo
     try:
         headers = table_obj.find_elements(By.XPATH, ".//thead/tr/th")
     except InvalidSelectorException:
@@ -471,7 +469,7 @@ def extract_fund_data(logger, table_obj) -> list | None:  # noqa: PLR0914
         )
         return None
 
-    today_str = datetime.now(local_tz).strftime("%Y-%m-%d")
+    today_str = DateHelper.today_str()
     fund_list = []
     rows = table_obj.find_elements(By.XPATH, ".//tbody/tr")
     if rows is None:
@@ -548,14 +546,14 @@ def main():
         )
     except RuntimeError as e:
         print(f"Configuration file error: {e}", file=sys.stderr)
-        return
+        sys.exit(1)     # Exit with errorcode 1 so that launch.sh can detect it
 
     # Initialize the SCLogger class
     try:
         logger = SCLogger(config.get_logger_settings())
     except RuntimeError as e:
         print(f"Logger initialisation error: {e}", file=sys.stderr)
-        return
+        sys.exit(1)     # Exit with errorcode 1 so that launch.sh can detect it
 
     # Setup email
     logger.register_email_settings(config.get_email_settings())

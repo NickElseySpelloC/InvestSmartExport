@@ -14,12 +14,10 @@ This app is designed to login to the [InvestSmart website](https://www.investsma
 ## Prerequisites
 * Python 3.x installed:
 macOS: `brew install python3`
-Windows: `winget install python3 --source winget --scope machine`
 * UV for Python installed:
 macOS: 'brew install uvicorn'
-Windows: `pip install uv`
 
-The shell script used to run the app (_launch.sh_ or _launch.ps1_) is uses the *uv sync* command to ensure that all the prerequitie Python packages are installed in the virtual environment.
+The shell script used to run the app (_launch.sh_) is uses the *uv sync* command to ensure that all the prerequitie Python packages are installed in the virtual environment.
 
 # Configuration File 
 The script uses the *config.yaml* YAML file for configuration. An example of included with the project (*config.yaml.example*). Copy this to *config.yaml* before running the app for the first time.  Here's an example config file:
@@ -87,13 +85,8 @@ Email:
 | SubjectPrefix | Optional. If set, the app will add this text to the start of any email subject line for emails it sends. |
 
 # Running the Script
-Run the app using the relavant shell script for your operating system:
 
-## macOS / Linux
 `launch.sh`
-
-## Windows 
-`powershell -ExecutionPolicy ByPass -c  .\launch.ps1`
 
 # Troubleshooting
 ## "No module named xxx"
